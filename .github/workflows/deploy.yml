@@ -1,9 +1,9 @@
 name: Deploy to EC2
 
+# Manual deploy only: run it from the Actions tab -> "Deploy to EC2" -> "Run workflow".
+# It no longer runs on push.
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:        # also lets you press "Run workflow" in the Actions tab
+  workflow_dispatch:
 
 # never run two deploys at once, and never cancel one halfway
 concurrency:
