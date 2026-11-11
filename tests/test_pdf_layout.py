@@ -59,12 +59,25 @@ def test_every_document_has_the_invoice_header_and_footer():
     for name, (pdf, title) in _documents().items():
         text = _text(pdf)
         first_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        assert first_lines[0] == title, (name, first_lines[:2])          # centred title on top
+        # centred title on top (the tax invoice also carries "ORIGINAL FOR RECIPIENT" at the right of that line)
+        assert first_lines[0] == title or (name == "invoice" and first_lines[0].split()[:2] == title.split()), (name, first_lines[:2])
         assert first_lines[1].startswith("Test Store"), name              # then the boxed shop header
         for part in ("Phone:", "99999", "Email:", "GSTIN:", "07ABCDE1234F1Z5", "State:", "07-Delhi"):
             assert part in text, (name, part)
         assert ("Authorized Signatory" in text or name == "purchase") and "For Test Store:" in text or name == "job card", name
         assert "computer-generated" in text or "not a tax invoice" in text or "Internal purchase record" in text, name
+
+
+def test_invoice_has_no_gst_column_serial_header_and_original_label():
+    text = _text(build_invoice_pdf(STORE, INVOICE, [_line(1, cgst_amount=90, sgst_amount=90, igst_amount=0)]))
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    assert lines[0].split()[0:2] == ["Tax", "Invoice"] and lines[0].rstrip().endswith("ORIGINAL FOR RECIPIENT")
+    header = next(ln for ln in lines if "Item Name" in ln)
+    assert "S.No." in header and "GST" not in header and "#" not in header
+    assert "Price/ Unit" in header and "Amount" in header
+    # the other item-table documents keep their GST column and "#"
+    quote_header = next(ln for ln in _text(build_quotation_pdf(STORE, QUOTATION, [_line(1)])).splitlines() if "Item Name" in ln)
+    assert "GST" in quote_header and "S.No." not in quote_header
 
 
 def test_job_card_has_customer_and_technician_cells():

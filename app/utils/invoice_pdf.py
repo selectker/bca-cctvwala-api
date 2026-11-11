@@ -190,14 +190,20 @@ class _Row:
 SERIAL_FS, SERIAL_H, MUTED_SERIAL = 7.0, 8.6, INK
 
 
-def _columns(has_discount: bool) -> list[tuple[str, float, float, str]]:
+def _columns(has_discount: bool, show_gst: bool = True, sn_label: str = "#") -> list[tuple[str, float, float, str]]:
     """(key, left x, right x, header) -- the cells run edge to edge between L and R."""
+    sn_w = 18 if sn_label == "#" else 32  # "S.No." needs more room than "#"; the extra width comes off the item column
     if has_discount:
-        widths = [("sn", 18, "#"), ("item", 150, "Item Name"), ("hsn", 54, "HSN/SAC"), ("qty", 44, "Quantity"),
+        widths = [("sn", 18, sn_label), ("item", 150, "Item Name"), ("hsn", 54, "HSN/SAC"), ("qty", 44, "Quantity"),
                   ("price", 58, "Price/ Unit"), ("disc", 54, "Discount"), ("gst", 68, "GST"), ("amt", 69, "Amount")]
     else:
-        widths = [("sn", 18, "#"), ("item", 182, "Item Name"), ("hsn", 60, "HSN/SAC"), ("qty", 52, "Quantity"),
+        widths = [("sn", 18, sn_label), ("item", 182, "Item Name"), ("hsn", 60, "HSN/SAC"), ("qty", 52, "Quantity"),
                   ("price", 62, "Price/ Unit"), ("gst", 71, "GST"), ("amt", 70, "Amount")]
+    widths = [(k, w, h) for k, w, h in widths]
+    if not show_gst:  # give the GST column's width to the item name
+        gst_w = next(w for k, w, _ in widths if k == "gst")
+        widths = [(k, w + gst_w if k == "item" else w, h) for k, w, h in widths if k != "gst"]
+    widths = [(k, sn_w if k == "sn" else (w - (sn_w - 18) if k == "item" else w), h) for k, w, h in widths]
     cols, x = [], L
     for key, w, head in widths:
         cols.append((key, x, x + w, head))
@@ -208,7 +214,8 @@ def _columns(has_discount: bool) -> list[tuple[str, float, float, str]]:
 
 def _prepare_rows(pen: _Pen, items: list[dict], cols, sym: str) -> list[_Row]:
     item_w = next(r - l for k, l, r, _ in cols if k == "item") - 10
-    gst_w = next(r - l for k, l, r, _ in cols if k == "gst") - 8
+    gst_w = next((r - l for k, l, r, _ in cols if k == "gst"), None)
+    gst_w = gst_w - 8 if gst_w is not None else None
     rows = []
     for it in items:
         qty, price = _dec(it.get("quantity")), _dec(it.get("unit_price"))
@@ -226,7 +233,8 @@ def _prepare_rows(pen: _Pen, items: list[dict], cols, sym: str) -> list[_Row]:
         serials = [str(b) for b in (it.get("serials") or it.get("barcodes") or []) if b]
         if serials:  # unit serial numbers, printed small under the item name
             row.serial_lines = pen.wrap("S/N: " + ", ".join(serials), SERIAL_FS, item_w, 14)
-        lines = max(len(row.name_lines), 1 if pen.width(gst_one_line) <= gst_w else 2, 2 if shown_pct > 0 else 1)
+        gst_lines = 1 if gst_w is None or pen.width(gst_one_line) <= gst_w else 2
+        lines = max(len(row.name_lines), gst_lines, 2 if shown_pct > 0 else 1)
         row.height = lines * LINE_H + 2 * ROW_PAD
         if row.serial_lines:
             row.height = max(row.height, len(row.name_lines) * LINE_H + 2 * ROW_PAD) + len(row.serial_lines) * SERIAL_H + 1
@@ -253,13 +261,14 @@ def _draw_row(pen: _Pen, row: _Row, top: float, cols, sym: str) -> None:
         right("disc", _inr(row.discount, sym) if row.discount > 0 else "")
         if row.disc_pct > 0:
             right("disc", f"({_qty(row.disc_pct)}%)", y - LINE_H, 7)
-    one_line = f"{_inr(row.gst_amt, sym)} ({row.gst_rate:.1f}%)"
-    gst_w = pos["gst"][1] - pos["gst"][0] - 8
-    if pen.width(one_line) <= gst_w:
-        right("gst", one_line)
-    else:
-        right("gst", _inr(row.gst_amt, sym))
-        right("gst", f"({row.gst_rate:.1f}%)", y - LINE_H, 7)
+    if "gst" in pos:
+        one_line = f"{_inr(row.gst_amt, sym)} ({row.gst_rate:.1f}%)"
+        gst_w = pos["gst"][1] - pos["gst"][0] - 8
+        if pen.width(one_line) <= gst_w:
+            right("gst", one_line)
+        else:
+            right("gst", _inr(row.gst_amt, sym))
+            right("gst", f"({row.gst_rate:.1f}%)", y - LINE_H, 7)
     right("amt", _inr(row.amount, sym))
 
 
@@ -323,6 +332,9 @@ class Spec:
     show_bank: bool = True                # bank details (and the pay-by-QR code, which also needs a balance owed)
     notes: str | None = None              # printed in the bottom-left cell
     show_signature: bool = True           # the store's signature image + "Authorized Signatory" caption (off for internal records)
+    show_gst_col: bool = True             # per-item GST column (the tax invoice drops it; the HSN tax summary still shows the tax)
+    sn_label: str = "#"                   # header of the serial-number column
+    corner_label: str | None = None       # bold label printed at the top right of every page (e.g. the copy type)
 
 
 def _draw_title(pen: _Pen, top: float, title: str = "Tax Invoice") -> float:
@@ -334,13 +346,15 @@ FOOT_GREY = (0.45, 0.45, 0.5)
 
 
 def begin_page(pen: _Pen, c, store: dict, title: str, number_label: str, number, page_no: int, logo: bytes | None,
-               cancelled: bool = False, draw_stamp=None) -> float:
+               cancelled: bool = False, draw_stamp=None, corner_label: str | None = None) -> float:
     """Start a page the way every document does: stamp when cancelled, centred title, then on page 1 the shop box and on
     later pages a right-aligned "<No label>: <number>  (continued)". Returns the y where the next box starts."""
     width, height = A4
     if cancelled and draw_stamp:
         draw_stamp(c, width, height)
     top = _draw_title(pen, height - 36, title)
+    if corner_label:  # e.g. "ORIGINAL FOR RECIPIENT", top right, on the title's line
+        pen.text(R, height - 50, corner_label, 8.5, bold=True, align="r")
     if page_no == 1:
         return _draw_shop_box(pen, c, store, top, logo)
     pen.text(R, top - 2, f"{number_label}: {number or ''}  (continued)", 8, align="r")
@@ -534,8 +548,9 @@ def _draw_footer(pen: _Pen, c, store: dict, invoice: dict, items: list[dict], co
         d = sum((_dec(i.get("discount_amount")) for i in items), Decimal(0))
         if d > 0:
             pen.text(pos["disc"][1] - 4, ty, _inr(d, sym), FS, bold=True, align="r")
-    pen.text(pos["gst"][1] - 4, ty, _inr(sum((_dec(i.get("cgst_amount")) + _dec(i.get("sgst_amount")) + _dec(i.get("igst_amount"))
-                                              for i in items), Decimal(0)), sym), FS, bold=True, align="r")
+    if "gst" in pos:
+        pen.text(pos["gst"][1] - 4, ty, _inr(sum((_dec(i.get("cgst_amount")) + _dec(i.get("sgst_amount")) + _dec(i.get("igst_amount"))
+                                                  for i in items), Decimal(0)), sym), FS, bold=True, align="r")
     pen.text(pos["amt"][1] - 4, ty, _inr(sum((_dec(i.get("line_total")) for i in items), Decimal(0)), sym), FS, bold=True, align="r")
     y = top - total_h
 
@@ -697,7 +712,8 @@ def _draw_qr(pen: _Pen, c, store: dict, invoice: dict, balance: Decimal, sym: st
 def build(store: dict, invoice: dict, items: list[dict], logo: bytes | None = None, signature: bytes | None = None,
           ticket_nos: list[str] | None = None, draw_stamp=None) -> bytes:
     """The tax invoice."""
-    return build_document(store, invoice, items, logo, signature, ticket_nos, draw_stamp, Spec())
+    spec = Spec(show_gst_col=False, sn_label="S.No.", corner_label="ORIGINAL FOR RECIPIENT")
+    return build_document(store, invoice, items, logo, signature, ticket_nos, draw_stamp, spec)
 
 
 def build_document(store: dict, invoice: dict, items: list[dict], logo: bytes | None, signature: bytes | None,
@@ -720,7 +736,7 @@ def build_document(store: dict, invoice: dict, items: list[dict], logo: bytes | 
     if igst_mode and _dec(invoice.get("total_cgst")) > 0:
         igst_mode = False  # a stored invoice never mixes them; trust the amounts
 
-    cols = _columns(has_discount)
+    cols = _columns(has_discount, spec.show_gst_col, spec.sn_label)
     rows = _prepare_rows(pen, items, cols, sym)
     for n, row in enumerate(rows, 1):
         row.number = str(n)
@@ -745,7 +761,8 @@ def build_document(store: dict, invoice: dict, items: list[dict], logo: bytes | 
     idx, page_no = 0, 0
     while True:
         page_no += 1
-        top = begin_page(pen, c, store, spec.title, spec.number_label, number, page_no, logo, cancelled, draw_stamp)
+        top = begin_page(pen, c, store, spec.title, spec.number_label, number, page_no, logo, cancelled, draw_stamp,
+                         spec.corner_label)
         if page_no == 1:
             top = _draw_party_box(pen, {**invoice}, ticket_nos, top, owed, spec)
         header_top = top
