@@ -1,5 +1,5 @@
 """Checks the Cloudflare R2 settings with the same client the API uses.
-Run:  docker exec bcacctvwala-api python scripts/r2_check.py
+Run:  docker exec -e PYTHONPATH=/app bcacctvwala-api python scripts/r2_check.py
 Writes, reads and deletes one tiny object in each bucket, and lists the backup prefix.
 """
 import sys
