@@ -141,6 +141,6 @@ curl -fsS http://127.0.0.1:4000/api/v1/version; echo
 
 # ---------------------------------------------------------------- 7. R2
 say "7/7 Checking Cloudflare R2"
-docker exec "$NAME" python scripts/r2_check.py || warn "R2 check failed: fix the R2_* values in .env, then run this script again (a plain docker restart does not re-read .env)"
+docker exec -e PYTHONPATH=/app "$NAME" python scripts/r2_check.py || warn "R2 check failed: fix the R2_* values in .env, then run this script again (a plain docker restart does not re-read .env)"
 
 say "Done. Next: nginx + HTTPS (deploy/nginx-bcacctvwala.conf), then the first-run setup if the database is new."
