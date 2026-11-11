@@ -75,9 +75,12 @@ def test_invoice_has_no_gst_column_serial_header_and_original_label():
     header = next(ln for ln in lines if "Item Name" in ln)
     assert "S.No." in header and "GST" not in header and "#" not in header
     assert "Price/ Unit" in header and "Amount" in header
+    assert "Terms & Conditions" in text and "Warranty from service center only" in text
+    assert "Delhi jurisdiction only" in text and "Goods once sold will not be taken back" in text
     # the other item-table documents keep their GST column and "#"
     quote_header = next(ln for ln in _text(build_quotation_pdf(STORE, QUOTATION, [_line(1)])).splitlines() if "Item Name" in ln)
     assert "GST" in quote_header and "S.No." not in quote_header
+    assert "Terms & Conditions" not in _text(build_quotation_pdf(STORE, QUOTATION, [_line(1)]))
 
 
 def test_job_card_has_customer_and_technician_cells():

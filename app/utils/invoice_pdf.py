@@ -335,6 +335,7 @@ class Spec:
     show_gst_col: bool = True             # per-item GST column (the tax invoice drops it; the HSN tax summary still shows the tax)
     sn_label: str = "#"                   # header of the serial-number column
     corner_label: str | None = None       # bold label printed at the top right of every page (e.g. the copy type)
+    terms: tuple[str, ...] = ()           # "Terms & Conditions" lines printed under the tax summary (none = no box)
 
 
 def _draw_title(pen: _Pen, top: float, title: str = "Tax Invoice") -> float:
@@ -612,10 +613,10 @@ def _draw_footer(pen: _Pen, c, store: dict, invoice: dict, items: list[dict], co
             tax = g["cgst"] + g["sgst"]
         pen.text(col["tax"][1] - 4, base, f"{round2(tax):.2f}", FS, bold=bold, align="r")
         ry -= _SUM_ROW_H
+        pen.hline(L, split, ry)  # a rule under every row, including TOTAL
 
     for g in groups:
         draw_group_row(g)
-    pen.hline(L, split, ry)
     total = {"hsn": "", "taxable": sum((g["taxable"] for g in groups), Decimal(0)), "rate": Decimal(0),
              "cgst": sum((g["cgst"] for g in groups), Decimal(0)), "sgst": sum((g["sgst"] for g in groups), Decimal(0)),
              "igst": sum((g["igst"] for g in groups), Decimal(0))}
@@ -623,6 +624,15 @@ def _draw_footer(pen: _Pen, c, store: dict, invoice: dict, items: list[dict], co
     # the rules between the summary columns, from the header down through the TOTAL row
     for key, l, _ in xs[1:]:
         pen.vline(l, head_top - head_h, ry)
+
+    # Terms & Conditions, in the space under the TOTAL row
+    term_lines = geometry.get("terms") or []
+    if term_lines:
+        pen.bar(L, split, ry, HEAD_BAR_H, "Terms & Conditions:")
+        ty_terms = ry - HEAD_BAR_H - 9
+        for ln in term_lines:
+            pen.text(L + 5, ty_terms, ln, FS)
+            ty_terms -= 11
 
     # totals panel
     ty = y
@@ -712,7 +722,9 @@ def _draw_qr(pen: _Pen, c, store: dict, invoice: dict, balance: Decimal, sym: st
 def build(store: dict, invoice: dict, items: list[dict], logo: bytes | None = None, signature: bytes | None = None,
           ticket_nos: list[str] | None = None, draw_stamp=None) -> bytes:
     """The tax invoice."""
-    spec = Spec(show_gst_col=False, sn_label="S.No.", corner_label="ORIGINAL FOR RECIPIENT")
+    spec = Spec(show_gst_col=False, sn_label="S.No.", corner_label="ORIGINAL FOR RECIPIENT",
+                terms=("Warranty from service center only.", "Dispute subject to Delhi jurisdiction only.",
+                       "Goods once sold will not be taken back."))
     return build_document(store, invoice, items, logo, signature, ticket_nos, draw_stamp, spec)
 
 
@@ -744,7 +756,11 @@ def build_document(store: dict, invoice: dict, items: list[dict], logo: bytes | 
     groups = _tax_groups(items)
     totals = _totals_rows(invoice, items, sym, balance)
     # footer geometry (the same on every page that carries it, so the table can be sized to leave room for it)
-    summary_left = HEAD_BAR_H + 2 * _SUM_ROW_H + _SUM_ROW_H * (len(groups) + 1) + 4
+    term_lines = []
+    for n, t in enumerate(spec.terms, 1):
+        term_lines += pen.wrap(f"{n}. {t}", FS, _SUMMARY_W - 12, 3)
+    terms_h = (HEAD_BAR_H + 11 * len(term_lines) + 5) if term_lines else 0
+    summary_left = HEAD_BAR_H + 2 * _SUM_ROW_H + _SUM_ROW_H * (len(groups) + 1) + 4 + terms_h
     words_n = len(pen.wrap(_amount_words(invoice), FS, R - (L + _SUMMARY_W) - 12, 3))
     pay_h = 32 if spec.show_payment else 0
     summary_right = 16 * len(totals) + HEAD_BAR_H + 11 * words_n + 6 + pay_h + 4
@@ -752,7 +768,7 @@ def build_document(store: dict, invoice: dict, items: list[dict], logo: bytes | 
     left_label, bank_rows, note_lines = _left_cell(pen, store, spec, show_qr)
     sign_h = 78.0 if (show_qr or bank_rows) else 64.0
     sign_h = max(sign_h, _left_cell_height(left_label, bank_rows, note_lines, show_qr))
-    geometry = {"groups": groups, "totals": totals, "summary_h": summary_h, "sign_h": sign_h}
+    geometry = {"groups": groups, "totals": totals, "summary_h": summary_h, "sign_h": sign_h, "terms": term_lines}
     total_row_h = 18.0
     footer_h = total_row_h + summary_h + HEAD_BAR_H + sign_h
     final_bottom = BOTTOM + footer_h  # where the item area ends on the last page
