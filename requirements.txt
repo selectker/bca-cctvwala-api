@@ -1,0 +1,17 @@
+fastapi==0.143.1
+uvicorn[standard]==0.54.0
+asyncpg==0.32.0
+pydantic==2.14.1
+pydantic-settings==2.16.0
+PyJWT==2.15.1
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.0
+reportlab==5.0.1
+Pillow==12.3.0
+slowapi==0.1.10
+python-dotenv==1.2.4
+alembic==1.13.2
+SQLAlchemy==2.0.35
+python-multipart==0.0.32
+boto3==1.40.0
+cryptography==50.0.2

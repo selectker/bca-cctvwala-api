@@ -1,0 +1,76 @@
+name: Deploy to EC2
+
+# Manual deploy only: run it from the Actions tab -> "Deploy to EC2" -> "Run workflow".
+on:
+  workflow_dispatch:
+
+# Never run two deploys at once. This only stops a NEW run from replacing a
+# running one; you can still cancel a run by hand with "Cancel workflow".
+concurrency:
+  group: deploy-production-2
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HOST: ${{ secrets.EC2_HOST }}
+      USER_NAME: ${{ secrets.EC2_USER }}
+      # folder on the server that holds the Dockerfile and your .env
+      APP_DIR: ${{ vars.APP_DIR || '/home/ubuntu/BCAcctvWala-api' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        timeout-minutes: 2
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          timeout 30 ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<CFG
+          Host ec2
+            HostName $HOST
+            User $USER_NAME
+            IdentityFile ~/.ssh/deploy_key
+            BatchMode yes
+            ConnectTimeout 15
+            ServerAliveInterval 15
+            ServerAliveCountMax 4
+          CFG
+
+      - name: Copy code to the server (the server's .env is never touched)
+        timeout-minutes: 5
+        run: |
+          ssh -T ec2 "mkdir -p '$APP_DIR'" < /dev/null
+          rsync -az --delete --timeout=60 \
+            -e "ssh -T" \
+            --exclude '.git' --exclude '.github' \
+            --exclude '.env' --exclude '.env.*' \
+            --exclude 'tests' --exclude '__pycache__' --exclude '*.zip' \
+            ./ "ec2:$APP_DIR/"
+
+      # -tt gives the remote script a terminal, so when you cancel the run
+      # (the ssh connection drops) the script gets a hangup and stops too.
+      # "timeout 18m" is a hard stop on the server if anything blocks.
+      - name: Build, migrate and restart (deploy/deploy.sh)
+        timeout-minutes: 20
+        run: |
+          ssh -tt ec2 "cd '$APP_DIR' && timeout 18m bash deploy/deploy.sh --yes" < /dev/null
+
+      - name: Prune old pre-deploy database copies (keep the newest 20)
+        timeout-minutes: 2
+        run: |
+          ssh -T ec2 'ls -1t ~/db-backups/pre-deploy-*.dump 2>/dev/null | tail -n +21 | xargs -r rm -f' < /dev/null
+
+      # Runs only when the run is cancelled or times out: stop anything the
+      # deploy left running on the server. The [d] stops pkill matching itself.
+      - name: Stop leftover deploy on the server
+        if: cancelled() || failure()
+        timeout-minutes: 2
+        continue-on-error: true
+        run: |
+          ssh -T ec2 "pkill -f '[d]eploy/deploy.sh' || true" < /dev/null
