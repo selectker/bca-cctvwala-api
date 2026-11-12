@@ -7,7 +7,7 @@ on:
 # Never run two deploys at once. This only stops a NEW run from replacing a
 # running one; you can still cancel a run by hand with "Cancel workflow".
 concurrency:
-  group: deploy-production
+  group: deploy-production-2
   cancel-in-progress: false
 
 jobs:
