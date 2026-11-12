@@ -10,6 +10,10 @@ from decimal import Decimal
 
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
+<<<<<<< HEAD
+=======
+from app.utils.dates import today_local
+>>>>>>> dc2fcd2 (Release v1.38.5)
 from app.utils.doc_pdf import CELL_SPLIT, Doc, Item
 from app.utils.gst import round2
 from app.utils.gstr import place_of_supply
@@ -521,7 +525,11 @@ def build_receipt_pdf(store: dict, kind: str, doc: dict, payment: dict, party: d
         page.kv("Document:", f"{number}  dated {_fmt_date(date_)}", 150),
         page.kv("Document Total:", _inr(doc["total_amount"], sym), 150),
         page.kv("Paid So Far:", _inr(doc.get("paid_amount"), sym), 150),
+<<<<<<< HEAD
         page.kv(f"Balance (as on {_fmt_date(date.today())}):", _inr(balance, sym), 150, bold=True),
+=======
+        page.kv(f"Balance (as on {_fmt_date(today_local())}):", _inr(balance, sym), 150, bold=True),
+>>>>>>> dc2fcd2 (Release v1.38.5)
     ])
     if payment.get("notes"):
         page.box("Notes:", page.paragraphs(payment["notes"], max_lines=4))

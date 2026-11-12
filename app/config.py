@@ -5,7 +5,11 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = "BCAcctvWala API"
+<<<<<<< HEAD
 APP_VERSION = "1.38.3"
+=======
+APP_VERSION = "1.38.5"
+>>>>>>> dc2fcd2 (Release v1.38.5)
 MIN_JWT_SECRET_LENGTH = 32
 
 

@@ -10,6 +10,10 @@ Cancelled documents (and the payments on them, which a cancel nets to zero) are 
 from datetime import date
 from decimal import Decimal
 
+<<<<<<< HEAD
+=======
+from app.utils.dates import today_local
+>>>>>>> dc2fcd2 (Release v1.38.5)
 from app.utils.gst import round2
 
 ZERO = Decimal("0.00")
@@ -177,7 +181,11 @@ def ledger_pdf(store: dict, data: dict, start: date | None, end: date | None) ->
             text(L, y, fit((store["address"]).replace("\n", ", "), reg, 8.3, R - L), 8.3)
         y -= 20
         text(L, y, title, 12, bold)
+<<<<<<< HEAD
         period = f"{start.strftime('%d-%m-%Y') if start else 'Beginning'} to {(end or date.today()).strftime('%d-%m-%Y')}"
+=======
+        period = f"{start.strftime('%d-%m-%Y') if start else 'Beginning'} to {(end or today_local()).strftime('%d-%m-%Y')}"
+>>>>>>> dc2fcd2 (Release v1.38.5)
         text(R, y, period, 8.3, reg, "r")
         y -= 15
         text(L, y, party["name"], 10, bold)

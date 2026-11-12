@@ -160,14 +160,22 @@ def _money(value) -> Decimal | None:
 
 
 def _check_not_past(value: date | None, what: str) -> None:
+<<<<<<< HEAD
     if value is not None and value < date.today():
+=======
+    if value is not None and value < today_local():
+>>>>>>> dc2fcd2 (Release v1.38.5)
         raise _bad(f"{what} can't be in the past")
 
 
 def _assert_warranty_valid(valid_until: date | None) -> None:
     if valid_until is None:
         raise _bad("No customer warranty is recorded for that unit — raise this as a Paid service")
+<<<<<<< HEAD
     if valid_until < date.today():
+=======
+    if valid_until < today_local():
+>>>>>>> dc2fcd2 (Release v1.38.5)
         raise _bad(f"The warranty on that unit ended on {valid_until.isoformat()} — raise this as a Paid service")
 
 

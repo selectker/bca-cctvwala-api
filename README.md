@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # BCAcctvWala API (Python / FastAPI) — v1.38.2
+=======
+# BCAcctvWala API (Python / FastAPI) — v1.38.5
+>>>>>>> dc2fcd2 (Release v1.38.5)
 
 This is a drop-in replacement for the Node/Express backend — **same
 PostgreSQL schema, same JSON request/response shapes**. Since v1.17.0 the
@@ -1382,3 +1386,14 @@ Tests: `tests/test_upi_qr.py`.
 
 ## v1.38.3
 - Unit serial numbers now print as "S/N: ..." under the item name on the invoice, credit note, debit note and purchase PDFs (only when serials were recorded on that line).
+<<<<<<< HEAD
+=======
+
+## v1.38.4
+- Back-dated invoices: `invoice_date` may be any day from 1 April of the current financial year up to today (omit for today). A due date on a back-dated invoice may fall between the invoice date and today, but not before the invoice date. The invoice number still comes from the current financial year series. No migration.
+
+Tests: `tests/test_backdated_invoice.py`.
+
+## v1.38.5
+- Fix: "today" now rolls over at midnight IST instead of 05:30 IST. Every database connection is opened with the store's time zone (`APP_TIMEZONE`, Asia/Kolkata by default), so `CURRENT_DATE` in dashboard sales, back-dated invoices, payments, expenses, purchases, warranties and AMC due dates all use the shop's day. Remaining Python `date.today()` calls (ticket date checks, AMC visit completion, ledger / PDF "as on" dates) now use `today_local()`. No migration.
+>>>>>>> dc2fcd2 (Release v1.38.5)

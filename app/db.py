@@ -53,6 +53,12 @@ async def connect_db() -> None:
         ssl=build_ssl_context(),
         min_size=2,
         max_size=15,
+<<<<<<< HEAD
+=======
+        # Every connection runs in the store's time zone (IST by default). Without this RDS hands out UTC sessions, so
+        # CURRENT_DATE / now()::date roll over at 05:30 IST and yesterday's sales show as "today" until then.
+        server_settings={"timezone": settings.app_timezone},
+>>>>>>> dc2fcd2 (Release v1.38.5)
     )
     # v1.13.2 keeps the sign-in lock-out counters in login_failures. Without the table every login would fail with a
     # 500, so refuse to start with a message that says what to do instead.

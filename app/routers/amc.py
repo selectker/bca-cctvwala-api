@@ -409,7 +409,11 @@ async def update_amc_visit(visit_id: str, body: UpdateAmcVisitRequest, current_u
                     found = None
                 if not found:
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That technician doesn't exist or is deactivated")
+<<<<<<< HEAD
             completed_date = (body.completed_date or existing["completed_date"] or date.today()) if body.status == "COMPLETED" else None
+=======
+            completed_date = (body.completed_date or existing["completed_date"] or today_local()) if body.status == "COMPLETED" else None
+>>>>>>> dc2fcd2 (Release v1.38.5)
 
             await conn.execute(
                 """UPDATE amc_service_visits SET status=$1, completed_date=$2, technician_id=$3::uuid, remarks=$4 WHERE id=$5::uuid""",
