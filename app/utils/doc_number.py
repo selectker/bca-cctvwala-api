@@ -1,14 +1,14 @@
-from datetime import date
-
 import asyncpg
+
+from app.utils.dates import financial_year_start, today_local
 
 # First half of the two-int advisory lock key (the second half is a hash of the number series).
 _DOC_NUMBER_LOCK_NAMESPACE = 727100
 
 
 def current_fy() -> str:
-    today = date.today()
-    fy_start_year = today.year if today.month >= 4 else today.year - 1
+    # The store's today (APP_TIMEZONE), the same day invoice dates are validated against.
+    fy_start_year = financial_year_start(today_local()).year
     fy_end_year_short = str((fy_start_year + 1) % 100).zfill(2)
     return f"{fy_start_year}-{fy_end_year_short}"
 

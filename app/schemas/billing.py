@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.products import HsnCode
 from app.schemas.types import Address, BarcodeList, DiscountPercent, NonNegativeMoney, GstRate, Id, IdList, LongText, MAX_LINES, MAX_LINE_VALUE, OptCode, OptId, Phone, PositiveMoney, Quantity, UnitPrice
-from app.utils.dates import today_local
+from app.utils.dates import financial_year_end, financial_year_start, today_local
 
 PaymentMode = Literal["CASH", "UPI", "BANK", "CHEQUE", "CARD"]
 
@@ -94,9 +94,36 @@ class _DueDateMixin(BaseModel):
     def _terms_or_date(self):
         if self.payment_terms_days is not None and self.due_date is not None:
             raise ValueError("Give payment terms (days) or a due date, not both")
-        if self.due_date is not None and self.due_date < today_local():
-            raise ValueError("The due date can't be in the past")
+        if self.due_date is not None:
+            # A back-dated invoice may fall due between its date and today; otherwise a due date can't be in the past.
+            invoice_date = getattr(self, "invoice_date", None)
+            if invoice_date is not None:
+                if self.due_date < invoice_date:
+                    raise ValueError("The due date can't be before the invoice date")
+            elif self.due_date < today_local():
+                raise ValueError("The due date can't be in the past")
         return self
+
+
+class _InvoiceDateMixin(BaseModel):
+    # Back-dating: the invoice date may be any day from 1 April of the current financial year up to today.
+    # Left out = today. The invoice number still comes from the current financial year's series.
+    invoice_date: date | None = None
+
+    @field_validator("invoice_date")
+    @classmethod
+    def _within_current_fy(cls, v: date | None) -> date | None:
+        if v is None:
+            return v
+        today = today_local()
+        if v > today:
+            raise ValueError("The invoice date can't be in the future")
+        fy_start = financial_year_start(today)
+        if v < fy_start:
+            raise ValueError(
+                f"The invoice date must be within the current financial year "
+                f"({fy_start:%d-%m-%Y} to {financial_year_end(today):%d-%m-%Y})")
+        return v
 
 
 class CreateQuotationRequest(_InvoiceDiscountMixin):
@@ -110,7 +137,7 @@ class UpdateQuotationStatusRequest(BaseModel):
     status: Literal["PENDING", "ACCEPTED", "REJECTED"]  # CONVERTED is only set by converting
 
 
-class CreateInvoiceRequest(_InvoiceDiscountMixin, _DueDateMixin):
+class CreateInvoiceRequest(_InvoiceDiscountMixin, _InvoiceDateMixin, _DueDateMixin):
     customer_id: Id
     invoice_type: str = "SALE"
     quotation_id: OptId = None
@@ -170,7 +197,7 @@ class ConvertItemOverride(BaseModel):
     customer_warranty_months: int | None = Field(default=None, ge=0, le=240)
 
 
-class ConvertQuotationRequest(_DueDateMixin):
+class ConvertQuotationRequest(_InvoiceDateMixin, _DueDateMixin):
     """Optional body for POST /invoices/from-quotation/{id}: supply the physical serials (and
     warranty length) for serialized lines so they're linked to warranties on the new invoice."""
     items: list[ConvertItemOverride] = []

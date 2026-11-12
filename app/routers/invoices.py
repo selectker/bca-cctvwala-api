@@ -388,7 +388,9 @@ async def _create_invoice(conn, customer_id: str, invoice_type: str, quotation_i
                            billing_address: str | None = None, shipping_address: str | None = None,
                            include_ticket_charges: bool = False, payment_terms_days: int | None = None,
                            due_date=None, allow_over_credit_limit: bool = False,
-                           buyer_name: str | None = None, buyer_phone: str | None = None) -> dict:
+                           buyer_name: str | None = None, buyer_phone: str | None = None,
+                           invoice_date=None) -> dict:
+    # invoice_date: None = today; otherwise a back date already checked by the request schema (current financial year).
     customer = await conn.fetchrow(
         "SELECT state_code, address, shipping_address, payment_terms_days, is_walk_in FROM customers WHERE id = $1", customer_id)
     if customer is None:
@@ -408,7 +410,7 @@ async def _create_invoice(conn, customer_id: str, invoice_type: str, quotation_i
     store_state_code = await get_store_state_code(conn)
     is_interstate = bool(buyer_state_code and buyer_state_code != store_state_code)
     # Due date: a date wins, then terms given on this invoice, then the customer's default terms; none = due on the
-    # invoice date. (The date itself is worked out in SQL from CURRENT_DATE, the same day the invoice gets.)
+    # invoice date. (The date itself is worked out in SQL from the invoice date, or CURRENT_DATE when none was given.)
     terms = None if due_date is not None else (payment_terms_days if payment_terms_days is not None
                                                else customer["payment_terms_days"])
 
@@ -448,14 +450,15 @@ async def _create_invoice(conn, customer_id: str, invoice_type: str, quotation_i
             """INSERT INTO invoices (invoice_no, customer_id, quotation_id, place_of_supply_state_code, is_interstate,
                                       subtotal, total_cgst, total_sgst, total_igst, round_off, total_amount, invoice_type, notes, created_by, total_discount,
                                       invoice_discount_percent, invoice_discount_amount, billing_address, shipping_address,
-                                      payment_terms_days, due_date, buyer_name, buyer_phone)
+                                      payment_terms_days, due_date, buyer_name, buyer_phone, invoice_date)
                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-                       COALESCE($21::date, CASE WHEN $20::int IS NOT NULL THEN CURRENT_DATE + $20::int END), $22, $23) RETURNING *""",
+                       COALESCE($21::date, CASE WHEN $20::int IS NOT NULL THEN COALESCE($24::date, CURRENT_DATE) + $20::int END),
+                       $22, $23, COALESCE($24::date, CURRENT_DATE)) RETURNING *""",
             invoice_no, customer_id, quotation_id, buyer_state_code, is_interstate,
             totals.subtotal, totals.total_cgst, totals.total_sgst, totals.total_igst,
             totals.round_off, totals.total_amount, invoice_type, notes, user_id, totals.total_discount,
             invoice_discount_percent if not invoice_discount_amount else 0, invoice_discount,
-            invoice_billing, invoice_shipping, terms, due_date, buyer_name, buyer_phone,
+            invoice_billing, invoice_shipping, terms, due_date, buyer_name, buyer_phone, invoice_date,
         )
 
         if service_ticket_ids:
@@ -497,7 +500,7 @@ async def create_invoice(body: CreateInvoiceRequest, current_user=Depends(get_cu
             body.invoice_discount_percent, body.invoice_discount_amount,
             body.billing_address, body.shipping_address, body.include_ticket_charges,
             body.payment_terms_days, body.due_date, body.allow_over_credit_limit,
-            buyer_name=body.buyer_name, buyer_phone=body.buyer_phone,
+            buyer_name=body.buyer_name, buyer_phone=body.buyer_phone, invoice_date=body.invoice_date,
         )
 
 
@@ -552,6 +555,7 @@ async def create_invoice_from_quotation(
             billing_address=body.billing_address, shipping_address=body.shipping_address,
             payment_terms_days=body.payment_terms_days, due_date=body.due_date,
             allow_over_credit_limit=body.allow_over_credit_limit,
+            invoice_date=body.invoice_date,
         )
 
 

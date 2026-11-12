@@ -15,6 +15,16 @@ def add_months(start: date, months: int) -> date:
     return date(year, month, day)
 
 
+def financial_year_start(d: date) -> date:
+    """1 April of the Indian financial year (April-March) that contains `d`."""
+    return date(d.year if d.month >= 4 else d.year - 1, 4, 1)
+
+
+def financial_year_end(d: date) -> date:
+    """31 March of the Indian financial year (April-March) that contains `d`."""
+    return date(financial_year_start(d).year + 1, 3, 31)
+
+
 def parse_date(value: str | None) -> date | None:
     """Query-string YYYY-MM-DD -> date (asyncpg refuses plain strings for DATE parameters)."""
     if value is None or value == "":
